@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-bazel=$(readlink -f /proc/${PPID}/exe)
+bazel=bazel # TODO: I guess
 
 function stale()
 {
@@ -29,7 +29,12 @@ bazel_format_file=("${bazel_format[@]}" --compile_one_dependency)
 
 cd $BUILD_WORKSPACE_DIRECTORY
 
-args=$(printf " union %s" "${@}" | sed "s/^ union \(.*\)/\1/")
+relpath=${BUILD_WORKING_DIRECTORY#"$BUILD_WORKSPACE_DIRECTORY"}
+if [[ -n $relpath ]]; then
+    relpath=${relpath#"/"}/
+fi
+
+args=$(printf " union $relpath%s" "${@}" | sed "s/^ union \(.*\)/\1/")
 
 source_files=$("${bazel_query[@]}" \
     "let t = kind(\"cc_.* rule\", ${args:-//...} except deps(@IGNORE@, 1)) in labels(srcs, \$t) union labels(hdrs, \$t)")
@@ -66,10 +71,10 @@ header_file_count=$(echo "$header_files" | sed '/^\s*$/d' | wc -l)
 
 # use bazel to generate the formatted files in a separate
 # directory in case the user is overriding .clang-format
-[[ $file_count -eq 0 ]] || "${bazel_format_file[@]}" --@@WORKSPACE@//:dry_run=False $files
+[[ $file_count -eq 0 ]] || "${bazel_format_file[@]}" --@@WORKSPACE@//:dry_run=False $files 2> /dev/null
 
 # format all header only libs
-[[ $header_file_count -eq 0 ]] || "${bazel_format[@]}" --@@WORKSPACE@//:dry_run=False $header_libs
+[[ $header_file_count -eq 0 ]] || "${bazel_format[@]}" --@@WORKSPACE@//:dry_run=False $header_libs 2> /dev/null
 
 for arg in $(echo "$files" "$header_files"); do
     generated="@BINDIR@${arg}.clang_format"
@@ -86,5 +91,5 @@ for arg in $(echo "$files" "$header_files"); do
 done
 
 # run format check to cache success
-[[ $file_count -eq 0 ]] || "${bazel_format_file[@]}" $files
-[[ $header_file_count -eq 0 ]] || "${bazel_format[@]}" $header_libs
+[[ $file_count -eq 0 ]] || "${bazel_format_file[@]}" $files 2> /dev/null
+[[ $header_file_count -eq 0 ]] || "${bazel_format[@]}" $header_libs 2> /dev/null

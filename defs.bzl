@@ -30,7 +30,7 @@ def _source_files_in(ctx, attr):
     for file_target in getattr(ctx.rule.attr, attr):
         files += file_target.files.to_list()
 
-    return [f for f in files if f.is_source]
+    return [f for f in files if f.is_source and "_vendor" not in f.dirname]
 
 def _check_format(ctx, package, f):
     binary = ctx.attr._binary.files_to_run.executable
