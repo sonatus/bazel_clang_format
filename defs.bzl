@@ -28,9 +28,10 @@ def _source_files_in(ctx, attr):
 
     files = []
     for file_target in getattr(ctx.rule.attr, attr):
-        files += file_target.files.to_list()
-
-    return [f for f in files if f.is_source and "_vendor" not in f.dirname]
+        for f in file_target.files.to_list():
+            if f.is_source and "_vendor" not in f.dirname and (f.extension == "cxx" or f.extension == "hxx"):
+                files.append(f)
+    return files
 
 def _check_format(ctx, package, f):
     binary = ctx.attr._binary.files_to_run.executable
