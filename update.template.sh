@@ -37,7 +37,7 @@ fi
 args=$(printf " union $relpath%s" "${@}" | sed "s/^ union \(.*\)/\1/")
 
 source_files=$("${bazel_query[@]}" \
-    "let t = kind(\"cc_.* rule\", ${args:-//...} except deps(@IGNORE@, 1)) in labels(srcs, \$t) union labels(hdrs, \$t)")
+    "let t = kind(\"cc_.* rule\", ${args:-//...} except deps(@IGNORE@, 1)) in kind(\"source file\", labels(srcs, \$t)) union kind(\"source file\", labels(hdrs, \$t))")
 
 "$bazel" build @BINARY@
 
@@ -53,30 +53,15 @@ if [[ -z $files ]] && [[ $(echo "$result" | grep "ERROR:"  | wc -l) -gt 0 ]]; th
     exit 1
 fi
 
-# libraries without `srcs` are not handled correctly with `--compile_one_dependency`
-header_libs=$("${bazel_query[@]}" \
-    "attr(\"srcs\", \"\[\]\", kind(\"cc_library rule\", ${args:-//...}))")
-
-result=$("${bazel_format[@]}" \
-             --keep_going \
-             --check_up_to_date \
-             $header_libs 2>&1 || true)
-
-header_files=$(stale "$result")
-
 file_count=$(echo "$files" | sed '/^\s*$/d' | wc -l)
-header_file_count=$(echo "$header_files" | sed '/^\s*$/d' | wc -l)
 
-[[ $file_count -ne 0 ]] || [[ $header_file_count -ne 0 ]] || exit 0
+[[ $file_count -ne 0 ]] || exit 0
 
 # use bazel to generate the formatted files in a separate
 # directory in case the user is overriding .clang-format
 [[ $file_count -eq 0 ]] || "${bazel_format_file[@]}" --@@WORKSPACE@//:dry_run=False $files 2> /dev/null
 
-# format all header only libs
-[[ $header_file_count -eq 0 ]] || "${bazel_format[@]}" --@@WORKSPACE@//:dry_run=False $header_libs 2> /dev/null
-
-for arg in $(echo "$files" "$header_files"); do
+for arg in $(echo "$files"); do
     generated="@BINDIR@${arg}.clang_format"
     if [[ ! -f "$generated" ]]; then
         continue
@@ -92,4 +77,3 @@ done
 
 # run format check to cache success
 [[ $file_count -eq 0 ]] || "${bazel_format_file[@]}" $files 2> /dev/null
-[[ $header_file_count -eq 0 ]] || "${bazel_format[@]}" $header_libs 2> /dev/null
